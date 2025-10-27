@@ -5,7 +5,6 @@ import {
   Image,
   StyleSheet,
   TouchableOpacity,
-  Vibration,
   Platform,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
