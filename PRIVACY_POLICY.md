@@ -47,12 +47,10 @@ We may update this Privacy Policy from time to time. Updates will be reflected b
 ---
 
 ## 7. Contact Us  
-If you have questions or concerns about this Privacy Policy, please contact the developer at:  
-
-📧 **legendtimer.app@gmail.com**
+If you have questions or concerns about this Privacy Policy, please contact the developer.
 
 ---
 
-### ✅ Summary  
+### Summary  
 LegendTimer is a **privacy-first timer app**.  
 No data is collected, transmitted, or sold. All settings stay on your device.
