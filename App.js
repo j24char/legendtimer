@@ -145,11 +145,7 @@ function ClockScreen({ navigation }) {
           resizeMode="contain"
         />
       </View>
-{/*       <Image
-        source={logoSource}
-        style={{ width: 200, height: 100, marginLeft: 16, marginRight: 16, }}
-        resizeMode="contain"
-      /> */}
+
       <Text style={styles.clockText}>{formatClock()}</Text>
 
       <View style={styles.timerBox}>
@@ -181,9 +177,48 @@ function ClockScreen({ navigation }) {
   );
 }
 
+function PrivacyPolicyScreen({ navigation }) {
+  return (
+    <View style={styles.container}>
+      <Text style={[styles.label, { fontSize: 24, marginBottom: 20 }]}>
+        Privacy Policy
+      </Text>
+      <Text style={{ color: "#0ff", fontSize: 16, marginBottom: 20 }}>
+        LegendTimer does not collect, store, or share any personal data. 
+        All app settings are stored locally on your device and never transmitted.
+        No analytics or tracking tools are used.
+      </Text>
+      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.configButton}>
+        <Text style={styles.configText}>Back</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function AboutScreen({ navigation }) {
+  return (
+    <View style={styles.container}>
+      <Text style={[styles.label, { fontSize: 24, marginBottom: 20 }]}>
+        About LegendTimer
+      </Text>
+      <Text style={{ color: "#0ff", fontSize: 16, marginBottom: 20 }}>
+        LegendTimer is a simple, neon-inspired workout and interval timer app 
+        designed for smooth performance and ease of use. 
+        It works across iOS, Android, and Web — including Fire TV devices.
+      </Text>
+      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.configButton}>
+        <Text style={styles.configText}>Back</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 function ConfigScreen({ navigation, route }) {
   const [is24Hour, setIs24Hour] = useState(true);
   const [intervalTime, setIntervalTime] = useState(30000);
+  const [originalFormat, setOriginalFormat] = useState(true);
+  const [originalInterval, setOriginalInterval] = useState(30000);
+  const [isModified, setIsModified] = useState(false);
 
   useEffect(() => {
     loadSettings();
@@ -192,13 +227,36 @@ function ConfigScreen({ navigation, route }) {
   const loadSettings = async () => {
     const f = await AsyncStorage.getItem("is24Hour");
     const i = await AsyncStorage.getItem("intervalTime");
-    if (f !== null) setIs24Hour(f === "true");
-    if (i) setIntervalTime(parseInt(i));
+
+    if (f !== null) {
+      const format = f === "true";
+      setIs24Hour(format);
+      setOriginalFormat(format);
+    }
+    if (i) {
+      const interval = parseInt(i);
+      setIntervalTime(interval);
+      setOriginalInterval(interval);
+    }
   };
 
-  const saveSettings = async () => {
-    await AsyncStorage.setItem("is24Hour", is24Hour.toString());
-    await AsyncStorage.setItem("intervalTime", intervalTime.toString());
+  // track when user makes a change
+  const handleFormatChange = () => {
+    const newVal = !is24Hour;
+    setIs24Hour(newVal);
+    setIsModified(newVal !== originalFormat || intervalTime !== originalInterval);
+  };
+
+  const handleIntervalChange = (opt) => {
+    setIntervalTime(opt);
+    setIsModified(is24Hour !== originalFormat || opt !== originalInterval);
+  };
+
+  const handleSaveOrBack = async () => {
+    if (isModified) {
+      await AsyncStorage.setItem("is24Hour", is24Hour.toString());
+      await AsyncStorage.setItem("intervalTime", intervalTime.toString());
+    }
     navigation.goBack();
   };
 
@@ -207,10 +265,7 @@ function ConfigScreen({ navigation, route }) {
   return (
     <View style={styles.container}>
       <Text style={styles.label}>Clock Format</Text>
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => setIs24Hour((prev) => !prev)}
-      >
+      <TouchableOpacity style={styles.clockButton} onPress={handleFormatChange}>
         <Text style={styles.buttonText}>
           {is24Hour ? "24 Hour" : "12 Hour"}
         </Text>
@@ -225,9 +280,8 @@ function ConfigScreen({ navigation, route }) {
               styles.button,
               intervalTime === opt && { backgroundColor: "#0ff" },
             ]}
-            onPress={() => setIntervalTime(opt)}
+            onPress={() => handleIntervalChange(opt)}
           >
-            {/* <Text style={styles.buttonText}>{opt / 1000}s</Text> */}
             <Text
               style={[
                 styles.buttonText,
@@ -240,12 +294,44 @@ function ConfigScreen({ navigation, route }) {
         ))}
       </View>
 
-      <TouchableOpacity onPress={saveSettings} style={styles.configButton}>
-        <Text style={styles.configText}>Save</Text>
+      {/* Dynamic Save/Back button */}
+      <TouchableOpacity
+        onPress={handleSaveOrBack}
+        style={[
+          styles.configButton,
+          isModified && { borderColor: "#f0f" },
+        ]}
+      >
+        <Text
+          style={[
+            styles.configText,
+            isModified && { color: "#f0f" },
+          ]}
+        >
+          {isModified ? "Save" : "Back"}
+        </Text>
       </TouchableOpacity>
+      <View style={styles.bottomButtonRow}>
+        <TouchableOpacity
+          onPress={() => navigation.navigate("PrivacyPolicy")}
+          style={styles.smallButton}
+        >
+          <Text style={styles.configText}>Privacy Policy</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => navigation.navigate("About")}
+          style={styles.smallButton}
+        >
+          <Text style={styles.configText}>About</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
+
+
+
 
 export default function App() {
   return (
@@ -253,6 +339,8 @@ export default function App() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Clock" component={ClockScreen} />
         <Stack.Screen name="Config" component={ConfigScreen} />
+        <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+        <Stack.Screen name="About" component={AboutScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -303,6 +391,19 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 20,
     margin: 5,
+    width: 90,
+    alignItems: "center",
+  },
+  clockButton: {
+    backgroundColor: "#111",
+    borderColor: "#0ff",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    margin: 5,
+    width: 150,
+    alignItems: "center",
   },
   buttonText: {
     color: "#0ff",
@@ -343,9 +444,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 10,
     borderRadius: 8,
+    alignItems: "center",
   },
   configText: {
     color: "#ff0",
+    fontSize: 18,
+  },
+  saveText: {
+    color: "#f0f",
     fontSize: 18,
   },
   logoContainer: {
@@ -358,4 +464,31 @@ const styles = StyleSheet.create({
     width: 200,
     height: 100,
   },
+  saveButton: {
+    marginTop: 30,
+    // borderColor: "#f0f",
+    width: 150,
+    alignItems: "center",
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignSelf: "center",
+  },
+  bottomButtonRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    width: "100%",
+    marginTop: 60,
+  },
+  smallButton: {
+    borderColor: "#ff0",
+    borderWidth: 1,
+    width: 150,
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderRadius: 8,
+  },
+
 });
