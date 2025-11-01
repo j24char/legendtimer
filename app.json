@@ -23,7 +23,8 @@
       },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "buildNumber": "10002"
     },
     "android": {
       "adaptiveIcon": {
@@ -35,7 +36,8 @@
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
-      ]
+      ],
+      "versionCode": 10002
     },
     "web": {
       "favicon": "./assets/favicon.png"
