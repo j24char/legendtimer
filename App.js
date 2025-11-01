@@ -13,6 +13,8 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Audio } from "expo-av";
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from "expo-haptics";
+import { Ionicons } from '@expo/vector-icons';
+
 
 const logoSource = Platform.OS === 'web' ? { uri: '/icon.png' } : require('./assets/LegendTimerSmall.png');
 const Stack = createNativeStackNavigator();
@@ -25,6 +27,7 @@ function formatTime(ms) {
 }
 
 function ClockScreen({ navigation }) {
+  // list of used state variables
   const [time, setTime] = useState(new Date());
   const [totalTime, setTotalTime] = useState(0);
   const [intervalTime, setIntervalTime] = useState(30000); // default 30s
@@ -32,16 +35,23 @@ function ClockScreen({ navigation }) {
   const [isRunning, setIsRunning] = useState(false);
   const [intervalRunning, setIntervalRunning] = useState(false);
   const [is24Hour, setIs24Hour] = useState(true);
-  const [timezone, setTimezone] = useState("local");
+  const [isMuted, setIsMuted] = useState(false);
+
+  // reference variables to be used within callbacks to get updated data
   const totalTimerRef = useRef(null);
   const intervalTimerRef = useRef(null);
   const lastBeepSecond = useRef(null);
-
+  const isMutedRef = useRef(false);
+  
   useEffect(() => {
     const tick = setInterval(() => setTime(new Date()), 1000);
     loadSettings();
     return () => clearInterval(tick);
   }, []);
+
+  useEffect(() => { 
+    isMutedRef.current = isMuted; 
+  }, [isMuted]);
 
   // Force to reload settings when focus returns to clock screen
   useFocusEffect(
@@ -75,13 +85,13 @@ function ClockScreen({ navigation }) {
         const newVal = prev - 1000;
         // Start beep when rolling over to start again
         if (newVal <= 0) {
-          playStart();
+          if (!isMutedRef.current) { playStart(); }
           return intervalTime;
         }
         // Beep for each of the last 3 seconds
         if (newVal <= 3000 && newVal > 0 && lastBeepSecond.current !== newVal) {
           lastBeepSecond.current = newVal;
-          playBeep();
+          if (!isMutedRef.current) { playBeep(); }
         }
         return newVal;
       });
@@ -114,6 +124,7 @@ function ClockScreen({ navigation }) {
       console.log('Error playing beep:', error);
     }
   }
+  
   async function playStart() {
     try {
       const { sound } = await Audio.Sound.createAsync(
@@ -136,6 +147,14 @@ function ClockScreen({ navigation }) {
     return formatted;
   };
 
+  const changeMute = () => {
+    setIsMuted(prev => {
+      const next = !prev;
+      isMutedRef.current = next; // update ref immediately
+      return next;
+    });
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.logoContainer}>
@@ -153,6 +172,16 @@ function ClockScreen({ navigation }) {
         <Text style={styles.timer}>{formatTime(totalTime)}</Text>
         <Text style={styles.label}>Interval ({intervalTime / 1000}s)</Text>
         <Text style={styles.timer}>{formatTime(remaining)}</Text>
+        {/* <TouchableOpacity onPress={ changeMute } style={styles.muteButton}>
+          <Text style={styles.buttonText}>{isMuted ? "Unmute" : "Mute"}</Text>
+        </TouchableOpacity> */}
+        <TouchableOpacity onPress={changeMute} style={styles.muteButton}>
+          <Ionicons
+            name={isMuted ? "volume-mute" : "volume-high"}
+            size={32}
+            color={isMuted ? "#f0f" : "#0ff"} 
+          />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.buttonRow}>
@@ -392,6 +421,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     margin: 5,
     width: 90,
+    alignItems: "center",
+  },
+  muteButton: {
+    backgroundColor: "#000",
+    //borderColor: "#0ff",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    margin: 5,
+    width: 110,
     alignItems: "center",
   },
   clockButton: {
