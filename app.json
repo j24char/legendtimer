@@ -2,7 +2,7 @@
   "expo": {
     "name": "LegendTimer",
     "slug": "LegendTimer",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/adaptive-icon.png",
     "userInterfaceStyle": "light",
@@ -24,7 +24,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "10002"
+      "buildNumber": "10003"
     },
     "android": {
       "adaptiveIcon": {
@@ -37,7 +37,7 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
-      "versionCode": 10002
+      "versionCode": 10003
     },
     "web": {
       "favicon": "./assets/favicon.png"

@@ -53,6 +53,19 @@ function ClockScreen({ navigation }) {
     isMutedRef.current = isMuted; 
   }, [isMuted]);
 
+  useEffect(() => {
+    async function configureAudio() {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        staysActiveInBackground: false,
+        playsInSilentModeIOS: true, // ✅ enables sound even if mute switch is on
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+    }
+    configureAudio();
+  }, []);
+
   // Force to reload settings when focus returns to clock screen
   useFocusEffect(
     React.useCallback(() => {
@@ -124,7 +137,6 @@ function ClockScreen({ navigation }) {
       console.log('Error playing beep:', error);
     }
   }
-  
   async function playStart() {
     try {
       const { sound } = await Audio.Sound.createAsync(
@@ -138,6 +150,7 @@ function ClockScreen({ navigation }) {
       console.log('Error playing start beep:', error);
     }
   }
+
 
   const formatClock = () => {
     let display = time;
