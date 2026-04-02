@@ -6,11 +6,14 @@ import {
   StyleSheet,
   TouchableOpacity,
   Platform,
+  useWindowDimensions,
+  ScrollView,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Audio } from "expo-av";
+import * as ScreenOrientation from "expo-screen-orientation";
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from "expo-haptics";
 import { Ionicons } from '@expo/vector-icons';
@@ -37,16 +40,30 @@ function ClockScreen({ navigation }) {
   const [is24Hour, setIs24Hour] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
 
+  // Get window dimensions for responsive layout
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+
   // reference variables to be used within callbacks to get updated data
   const totalTimerRef = useRef(null);
   const intervalTimerRef = useRef(null);
   const lastBeepSecond = useRef(null);
   const isMutedRef = useRef(false);
+  const beepSoundRef = useRef(null);
+  const startSoundRef = useRef(null);
+  const soundsLoadedRef = useRef(false);
   
   useEffect(() => {
     const tick = setInterval(() => setTime(new Date()), 1000);
     loadSettings();
-    return () => clearInterval(tick);
+    
+    // Cleanup on unmount
+    return () => {
+      clearInterval(tick);
+      if (totalTimerRef.current) clearInterval(totalTimerRef.current);
+      if (intervalTimerRef.current) clearInterval(intervalTimerRef.current);
+      unloadSounds();
+    };
   }, []);
 
   useEffect(() => { 
@@ -63,7 +80,18 @@ function ClockScreen({ navigation }) {
         playThroughEarpieceAndroid: false,
       });
     }
+    
+    async function configureOrientation() {
+      try {
+        // Allow all orientations (portrait and landscape)
+        await ScreenOrientation.unlockAsync();
+      } catch (error) {
+        console.log('Error configuring orientation:', error);
+      }
+    }
+    
     configureAudio();
+    configureOrientation();
   }, []);
 
   // Force to reload settings when focus returns to clock screen
@@ -89,6 +117,9 @@ function ClockScreen({ navigation }) {
     if (isRunning) return;
     setIsRunning(true);
     setIntervalRunning(true);
+    lastBeepSecond.current = null; // Reset beep tracking
+    preloadSounds(); // Preload sounds before starting
+    
     totalTimerRef.current = setInterval(() => {
       setTotalTime((prev) => prev + 1000);
     }, 1000);
@@ -99,12 +130,16 @@ function ClockScreen({ navigation }) {
         // Start beep when rolling over to start again
         if (newVal <= 0) {
           if (!isMutedRef.current) { playStart(); }
+          lastBeepSecond.current = null; // Reset for next interval
           return intervalTime;
         }
-        // Beep for each of the last 3 seconds
-        if (newVal <= 3000 && newVal > 0 && lastBeepSecond.current !== newVal) {
-          lastBeepSecond.current = newVal;
-          if (!isMutedRef.current) { playBeep(); }
+        // Beep for each of the last 3 seconds (3000ms, 2000ms, 1000ms)
+        if (newVal <= 3000 && newVal > 0) {
+          const currentSecond = Math.round(newVal / 1000);
+          if (lastBeepSecond.current !== currentSecond) {
+            lastBeepSecond.current = currentSecond;
+            if (!isMutedRef.current) { playBeep(); }
+          }
         }
         return newVal;
       });
@@ -116,6 +151,7 @@ function ClockScreen({ navigation }) {
     clearInterval(intervalTimerRef.current);
     setIsRunning(false);
     setIntervalRunning(false);
+    unloadSounds(); // Cleanup sounds when stopping
   };
 
   const resetTimers = () => {
@@ -124,30 +160,76 @@ function ClockScreen({ navigation }) {
     setRemaining(intervalTime);
   };
 
+  // Preload sounds at the start of the timer for instant playback
+  async function preloadSounds() {
+    if (soundsLoadedRef.current) return; // Already loaded
+    
+    try {
+      // Load beep sound
+      if (!beepSoundRef.current) {
+        const { sound: beepSound } = await Audio.Sound.createAsync(
+          require('./assets/beep.mp3'),
+          { shouldPlay: false, isLooping: false }
+        );
+        beepSoundRef.current = beepSound;
+      }
+      
+      // Load start sound
+      if (!startSoundRef.current) {
+        const { sound: startSound } = await Audio.Sound.createAsync(
+          require('./assets/start.mp3'),
+          { shouldPlay: false, isLooping: false }
+        );
+        startSoundRef.current = startSound;
+      }
+      
+      soundsLoadedRef.current = true;
+      console.log('Sounds preloaded successfully');
+    } catch (error) {
+      console.log('Error preloading sounds:', error);
+    }
+  }
+
+  // Unload sounds to free resources
+  async function unloadSounds() {
+    try {
+      if (beepSoundRef.current) {
+        await beepSoundRef.current.unloadAsync();
+        beepSoundRef.current = null;
+      }
+      if (startSoundRef.current) {
+        await startSoundRef.current.unloadAsync();
+        startSoundRef.current = null;
+      }
+      soundsLoadedRef.current = false;
+    } catch (error) {
+      console.log('Error unloading sounds:', error);
+    }
+  }
+
+  // Play preloaded beep sound (instant, no load time)
   async function playBeep() {
     try {
-      const { sound } = await Audio.Sound.createAsync(
-        require('./assets/beep.mp3'),
-        { shouldPlay: true }
-      );
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.didJustFinish) sound.unloadAsync();
-      });
+      if (beepSoundRef.current) {
+        // Reset to beginning and play
+        await beepSoundRef.current.setPositionAsync(0);
+        await beepSoundRef.current.playAsync();
+      }
     } catch (error) {
       console.log('Error playing beep:', error);
     }
   }
+
+  // Play preloaded start sound (instant, no load time)
   async function playStart() {
     try {
-      const { sound } = await Audio.Sound.createAsync(
-        require('./assets/start.mp3'),
-        { shouldPlay: true }
-      );
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.didJustFinish) sound.unloadAsync();
-      });
+      if (startSoundRef.current) {
+        // Reset to beginning and play
+        await startSoundRef.current.setPositionAsync(0);
+        await startSoundRef.current.playAsync();
+      }
     } catch (error) {
-      console.log('Error playing start beep:', error);
+      console.log('Error playing start sound:', error);
     }
   }
 
@@ -169,35 +251,70 @@ function ClockScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.logoContainer}>
+    <ScrollView 
+      contentContainerStyle={[
+        styles.container,
+        isLandscape && styles.containerLandscape
+      ]}
+      showsVerticalScrollIndicator={false}
+      scrollEnabled={true}
+    >
+      <View style={[
+        styles.logoContainer,
+        isLandscape && styles.logoContainerLandscape
+      ]}>
         <Image
           source={logoSource}
-          style={styles.logo}
+          style={[
+            styles.logo,
+            isLandscape && styles.logoLandscape
+          ]}
           resizeMode="contain"
         />
       </View>
 
-      <Text style={styles.clockText}>{formatClock()}</Text>
+      <Text style={[
+        styles.clockText,
+        isLandscape && styles.clockTextLandscape
+      ]}>{formatClock()}</Text>
 
-      <View style={styles.timerBox}>
-        <Text style={styles.label}>Workout Total</Text>
-        <Text style={styles.timer}>{formatTime(totalTime)}</Text>
-        <Text style={styles.label}>Interval ({intervalTime / 1000}s)</Text>
-        <Text style={styles.timer}>{formatTime(remaining)}</Text>
-        {/* <TouchableOpacity onPress={ changeMute } style={styles.muteButton}>
-          <Text style={styles.buttonText}>{isMuted ? "Unmute" : "Mute"}</Text>
-        </TouchableOpacity> */}
+      <View style={[
+        styles.timerBox,
+        isLandscape && styles.timerBoxLandscape
+      ]}>
+        <View style={styles.timerColumn}>
+          <Text style={[
+            styles.label,
+            isLandscape && styles.labelLandscape
+          ]}>Workout Total</Text>
+          <Text style={[
+            styles.timer,
+            isLandscape && styles.timerLandscape
+          ]}>{formatTime(totalTime)}</Text>
+        </View>
+        <View style={styles.timerColumn}>
+          <Text style={[
+            styles.label,
+            isLandscape && styles.labelLandscape
+          ]}>Interval ({intervalTime / 1000}s)</Text>
+          <Text style={[
+            styles.timer,
+            isLandscape && styles.timerLandscape
+          ]}>{formatTime(remaining)}</Text>
+        </View>
         <TouchableOpacity onPress={changeMute} style={styles.muteButton}>
           <Ionicons
             name={isMuted ? "volume-mute" : "volume-high"}
-            size={32}
+            size={isLandscape ? 24 : 32}
             color={isMuted ? "#f0f" : "#0ff"} 
           />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.buttonRow}>
+      <View style={[
+        styles.buttonRow,
+        isLandscape && styles.buttonRowLandscape
+      ]}>
         <TouchableOpacity onPress={startTimers} style={styles.button}>
           <Text style={styles.buttonText}>Start</Text>
         </TouchableOpacity>
@@ -211,11 +328,14 @@ function ClockScreen({ navigation }) {
 
       <TouchableOpacity
         onPress={() => navigation.navigate("Config", { intervalTime })}
-        style={styles.configButton}
+        style={[
+          styles.configButton,
+          isLandscape && styles.configButtonLandscape
+        ]}
       >
         <Text style={styles.configText}>Settings</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -394,36 +514,44 @@ const styles = StyleSheet.create({
     backgroundColor: "black",
     alignItems: "center",
     justifyContent: "center",
-    padding: 20,
+    padding: 10,
   },
   clockText: {
-    fontSize: 54,
+    fontSize: 48,
     color: "#0ff",
     textShadowColor: "#0ff",
     textShadowRadius: 20,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
   },
   timerBox: {
-    marginTop: 40,
+    marginTop: 15,
     alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    flexWrap: "wrap",
+    width: "100%",
+  },
+  timerColumn: {
+    alignItems: "center",
+    marginHorizontal: 15,
   },
   timer: {
-    fontSize: 42,
+    fontSize: 32,
     color: "#ff0",
     textShadowColor: "#ff0",
     textShadowRadius: 15,
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
   },
   label: {
-    fontSize: 18,
+    fontSize: 16,
     color: "#0FF",
-    marginTop: 10,
+    marginTop: 5,
   },
   buttonRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
-    marginTop: 30,
+    marginTop: 15,
   },
   button: {
     backgroundColor: "#111",
@@ -492,7 +620,7 @@ const styles = StyleSheet.create({
     color: 'black',
   },
   configButton: {
-    marginTop: 40,
+    marginTop: 15,
     borderColor: "#ff0",
     borderWidth: 1,
     padding: 10,
@@ -511,14 +639,14 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
     marginTop: 0,
-    marginBottom: 40,
+    marginBottom: 15,
   },
   logo: {
     width: 200,
     height: 100,
   },
   saveButton: {
-    marginTop: 30,
+    marginTop: 15,
     // borderColor: "#f0f",
     width: 150,
     alignItems: "center",
@@ -532,16 +660,47 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-around",
     width: "100%",
-    marginTop: 60,
+    marginTop: 20,
   },
   smallButton: {
     borderColor: "#ff0",
     borderWidth: 1,
     width: 150,
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 15,
     borderRadius: 8,
+  },
+  // Landscape-specific styles
+  containerLandscape: {
+    justifyContent: "flex-start",
+    paddingVertical: 15,
+  },
+  logoContainerLandscape: {
+    marginBottom: 15,
+  },
+  logoLandscape: {
+    width: 100,
+    height: 50,
+  },
+  clockTextLandscape: {
+    fontSize: 32,
+  },
+  timerBoxLandscape: {
+    marginTop: 15,
+  },
+  labelLandscape: {
+    fontSize: 14,
+    marginTop: 5,
+  },
+  timerLandscape: {
+    fontSize: 24,
+  },
+  buttonRowLandscape: {
+    marginTop: 10,
+  },
+  configButtonLandscape: {
+    marginTop: 10,
   },
 
 });

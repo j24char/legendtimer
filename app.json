@@ -3,7 +3,7 @@
     "name": "LegendTimer",
     "slug": "LegendTimer",
     "version": "1.0.3",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/adaptive-icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -37,7 +37,8 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
-      "versionCode": 10003
+      "versionCode": 10003,
+      "screenOrientation": "sensor"
     },
     "web": {
       "favicon": "./assets/favicon.png"
